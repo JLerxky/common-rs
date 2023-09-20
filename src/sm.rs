@@ -16,6 +16,15 @@ use anyhow::{anyhow, Result};
 use efficient_sm2::{KeyPair, PublicKey, Signature};
 
 pub const SM2_SIGNATURE_BYTES_LEN: usize = 128;
+pub const SM2_PUBLIC_KEY_LEN: usize = 64;
+
+pub fn sm2_public_key(private_key: &[u8]) -> Result<[u8; SM2_PUBLIC_KEY_LEN]> {
+    let key_pair = efficient_sm2::KeyPair::new(private_key)
+        .map_err(|e| anyhow::anyhow!("create sm key_pair failed: {e:?}"))?;
+    let mut public_key_bytes = [0u8; SM2_PUBLIC_KEY_LEN];
+    public_key_bytes.copy_from_slice(&key_pair.public_key().bytes_less_safe()[1..]);
+    Ok(public_key_bytes)
+}
 
 pub fn sm2_sign(
     pubkey: &[u8],
