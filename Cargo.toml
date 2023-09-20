@@ -6,13 +6,15 @@ license = "Apache-2.0"
 authors = ["Rivtower Technologies <contact@rivtower.com>"]
 
 [features]
-default = ["restful", "consul"]
+default = ["restful", "consul", "sm"]
 restful = ["dep:axum", "dep:serde", "dep:serde_json"]
 consul = ["dep:rs-consul"]
+sm = ["dep:efficient-sm2"]
 
 [dependencies]
 anyhow = "1.0"
 axum = { version = "0.6", optional = true }
+efficient-sm2 = { version = "0.2", optional = true }
 rs-consul = { version = "0.4", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }

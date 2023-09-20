@@ -26,3 +26,6 @@ pub mod consul;
 
 #[cfg(feature = "restful")]
 pub mod restful;
+
+#[cfg(feature = "sm")]
+pub mod sm;
