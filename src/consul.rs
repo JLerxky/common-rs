@@ -17,7 +17,18 @@ use rs_consul::{
     Consul, RegisterEntityCheck, RegisterEntityPayload, RegisterEntityService, ResponseMeta,
 };
 
-pub async fn register_service(consul: &Consul, service_name: String, port: u16) -> Result<()> {
+pub type ConsulClient = Consul;
+
+pub async fn register_to_consul(
+    consul_addr: String,
+    service_name: String,
+    port: u16,
+) -> Result<ConsulClient> {
+    let consul = Consul::new(rs_consul::Config {
+        address: consul_addr,
+        token: Some("".to_string()),
+        ..Default::default()
+    });
     let payload = RegisterEntityPayload {
         ID: None,
         Node: "LOCAL".to_string(),
@@ -66,7 +77,7 @@ pub async fn register_service(consul: &Consul, service_name: String, port: u16) 
             ))
         })?;
     if service_names_after_register.contains(&service_name) {
-        Ok(())
+        Ok(consul)
     } else {
         Err(anyhow::anyhow!(
             "register service({}) failed: service not found",
