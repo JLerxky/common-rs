@@ -36,6 +36,12 @@ pub fn sm2_sign(
 }
 
 pub fn sm2_verify(signature: &[u8], message: &[u8]) -> Result<bool> {
+    if signature.len() != SM2_SIGNATURE_BYTES_LEN {
+        return Err(anyhow!(
+            "sm2_verify: signature length is not {}",
+            SM2_SIGNATURE_BYTES_LEN
+        ));
+    }
     let r = &signature[0..32];
     let s = &signature[32..64];
     let pk = &signature[64..];
