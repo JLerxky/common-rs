@@ -18,6 +18,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use serde::Serialize;
 use serde_json::json;
 
 #[derive(Debug)]
@@ -67,33 +68,40 @@ pub async fn handle_http_error<B>(req: Request<B>, next: Next<B>) -> impl IntoRe
     }
 }
 
-pub fn ok<T: serde::Serialize>(data: T) -> Result<impl IntoResponse, RESTfulError> {
-    Ok((
-        StatusCode::OK,
-        Json(json!({
-            "code": 200,
-            "message": "OK",
-            "data": data,
-        })),
-    ))
+#[derive(Debug, Serialize)]
+pub struct RESTfulResponse<T: Serialize> {
+    code: u16,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<T>,
+}
+
+impl<T: Serialize> IntoResponse for RESTfulResponse<T> {
+    fn into_response(self) -> Response {
+        (
+            StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+            Json(json!({
+                "code": self.code,
+                "message": self.message,
+                "data": self.data,
+            })),
+        )
+            .into_response()
+    }
+}
+
+pub fn ok<T: Serialize>(data: T) -> Result<impl IntoResponse, RESTfulError> {
+    Ok(RESTfulResponse {
+        code: 200,
+        message: "OK".to_string(),
+        data: Some(data),
+    })
 }
 
 pub fn ok_no_data() -> Result<impl IntoResponse, RESTfulError> {
-    Ok((
-        StatusCode::OK,
-        Json(json!({
-            "code": 200,
-            "message": "OK",
-        })),
-    ))
-}
-
-pub fn err(code: StatusCode, message: &str) -> Result<impl IntoResponse, RESTfulError> {
-    Ok((
-        code,
-        Json(json!({
-            "code": code.as_u16(),
-            "message": message,
-        })),
-    ))
+    Ok(RESTfulResponse::<()> {
+        code: 200,
+        message: "OK".to_string(),
+        data: None,
+    })
 }
