@@ -16,42 +16,49 @@ use anyhow::Result;
 use rs_consul::{
     Consul, RegisterEntityCheck, RegisterEntityPayload, RegisterEntityService, ResponseMeta,
 };
+use serde::{Deserialize, Serialize};
 
 pub type ConsulClient = Consul;
 
-pub async fn register_to_consul(
-    consul_addr: String,
-    service_name: String,
-    port: u16,
-) -> Result<ConsulClient> {
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ConsulConfig {
+    pub consul_addr: String,
+    pub node: String,
+    pub service_name: String,
+    pub service_address: String,
+    pub service_port: u16,
+}
+
+pub async fn register_to_consul(config: ConsulConfig) -> Result<ConsulClient> {
     let consul = Consul::new(rs_consul::Config {
-        address: consul_addr,
+        address: config.consul_addr,
         token: Some("".to_string()),
         ..Default::default()
     });
     let payload = RegisterEntityPayload {
         ID: None,
-        Node: "LOCAL".to_string(),
-        Address: "127.0.0.1".to_string(),
+        Node: config.node,
+        Address: config.service_address,
         Datacenter: None,
         TaggedAddresses: Default::default(),
         NodeMeta: Default::default(),
         Service: Some(RegisterEntityService {
-            ID: Some(service_name.to_string()),
-            Service: service_name.to_string(),
+            ID: Some(config.service_name.clone()),
+            Service: config.service_name.clone(),
             Tags: vec![],
             TaggedAddresses: Default::default(),
             Meta: Default::default(),
-            Port: Some(port),
+            Port: Some(config.service_port),
             Namespace: None,
         }),
         Check: Some(RegisterEntityCheck {
             Node: None,
             CheckID: None,
-            Name: service_name.to_string(),
+            Name: config.service_name.clone(),
             Notes: None,
             Status: Some("passing".to_string()),
-            ServiceID: Some(service_name.to_string()),
+            ServiceID: Some(config.service_name.clone()),
             Definition: Default::default(),
         }),
         SkipNodeUpdate: None,
@@ -59,7 +66,7 @@ pub async fn register_to_consul(
     consul.register_entity(&payload).await.map_err(|e| {
         anyhow::Error::msg(format!(
             "register service({}) failed: {:?}",
-            service_name, e
+            config.service_name, e
         ))
     })?;
 
@@ -73,15 +80,15 @@ pub async fn register_to_consul(
         .map_err(|e| {
             anyhow::Error::msg(format!(
                 "register service({}) failed: {:?}",
-                service_name, e
+                config.service_name, e
             ))
         })?;
-    if service_names_after_register.contains(&service_name) {
+    if service_names_after_register.contains(&config.service_name) {
         Ok(consul)
     } else {
         Err(anyhow::anyhow!(
             "register service({}) failed: service not found",
-            service_name
+            config.service_name
         ))
     }
 }
