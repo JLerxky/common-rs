@@ -23,16 +23,16 @@ use serde_json::json;
 
 #[derive(Debug)]
 pub struct RESTfulError {
-    code: StatusCode,
+    code: u16,
     err: anyhow::Error,
 }
 
 impl IntoResponse for RESTfulError {
     fn into_response(self) -> Response {
         (
-            self.code,
+            StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
             Json(json!({
-                "code": self.code.as_u16(),
+                "code": self.code,
                 "message": self.err.to_string(),
             })),
         )
@@ -46,7 +46,7 @@ where
 {
     fn from(err: E) -> Self {
         Self {
-            code: StatusCode::INTERNAL_SERVER_ERROR,
+            code: 500,
             err: err.into(),
         }
     }
@@ -104,4 +104,11 @@ pub fn ok_no_data() -> Result<impl IntoResponse, RESTfulError> {
         message: "OK".to_string(),
         data: None,
     })
+}
+
+pub fn err(code: u16, message: String) -> RESTfulError {
+    RESTfulError {
+        code,
+        err: anyhow::anyhow!(message),
+    }
 }
