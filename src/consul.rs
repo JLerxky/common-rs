@@ -12,83 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::Result;
-use rs_consul::{
-    Consul, RegisterEntityCheck, RegisterEntityPayload, RegisterEntityService, ResponseMeta,
-};
+use anyhow::{anyhow, Result};
+use hyper::{client::HttpConnector, Body, Client, Method, Request, StatusCode};
 use serde::{Deserialize, Serialize};
-
-pub type ConsulClient = Consul;
+use serde_json::json;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ConsulConfig {
     pub consul_addr: String,
-    pub node: String,
+    pub tags: Vec<String>,
     pub service_name: String,
+    pub service_id: String,
     pub service_address: String,
     pub service_port: u16,
+    pub check_http_path: String,
+    pub check_interval: String,
+    pub check_timeout: String,
+    pub check_deregister_critical_service_after: String,
 }
 
-pub async fn register_to_consul(config: ConsulConfig) -> Result<ConsulClient> {
-    let consul = Consul::new(rs_consul::Config {
-        address: config.consul_addr,
-        token: Some("".to_string()),
-        ..Default::default()
-    });
-    let payload = RegisterEntityPayload {
-        ID: None,
-        Node: config.node,
-        Address: config.service_address,
-        Datacenter: None,
-        TaggedAddresses: Default::default(),
-        NodeMeta: Default::default(),
-        Service: Some(RegisterEntityService {
-            ID: Some(config.service_name.clone()),
-            Service: config.service_name.clone(),
-            Tags: vec![],
-            TaggedAddresses: Default::default(),
-            Meta: Default::default(),
-            Port: Some(config.service_port),
-            Namespace: None,
-        }),
-        Check: Some(RegisterEntityCheck {
-            Node: None,
-            CheckID: None,
-            Name: config.service_name.clone(),
-            Notes: None,
-            Status: Some("passing".to_string()),
-            ServiceID: Some(config.service_name.clone()),
-            Definition: Default::default(),
-        }),
-        SkipNodeUpdate: None,
-    };
-    consul.register_entity(&payload).await.map_err(|e| {
-        anyhow::Error::msg(format!(
-            "register service({}) failed: {:?}",
-            config.service_name, e
-        ))
-    })?;
+pub async fn service_register(
+    http_client: &Client<HttpConnector, Body>,
+    config: &ConsulConfig,
+) -> Result<()> {
+    let uri = format!("{}/v1/agent/service/register", config.consul_addr);
+    let request = Request::builder()
+            .method(Method::PUT)
+            .uri(uri)
+            .body(json!({
+                "ID": config.service_id,
+                "Name": config.service_name,
+                "Port": config.service_port,
+                "Tags": config.tags,
+                "Address": config.service_address,
+                "Check": {
+                    "Name": config.service_name.clone() + "_check",
+                    "DeregisterCriticalServiceAfter": config.check_deregister_critical_service_after,
+                    "HTTP": format!("http://{}:{}{}", config.service_address, config.service_port, config.check_http_path),
+                    "Interval": config.check_interval,
+                    "Timeout": config.check_timeout,
+                }
+            }).to_string().into())
+            .map_err(|e| anyhow!("build consul register request failed: {e}"))?;
 
-    // verify the newly registered service is retrieved
-    let ResponseMeta {
-        response: service_names_after_register,
-        ..
-    } = consul
-        .get_all_registered_service_names(None)
+    let rsp = http_client
+        .request(request)
         .await
-        .map_err(|e| {
-            anyhow::Error::msg(format!(
-                "register service({}) failed: {:?}",
-                config.service_name, e
-            ))
-        })?;
-    if service_names_after_register.contains(&config.service_name) {
-        Ok(consul)
+        .map_err(|e| anyhow!("register to consul failed: {e}"))?;
+    if rsp.status() != StatusCode::OK {
+        Err(anyhow!("register to consul failed: {rsp:?}"))
     } else {
-        Err(anyhow::anyhow!(
-            "register service({}) failed: service not found",
-            config.service_name
-        ))
+        Ok(())
     }
 }
