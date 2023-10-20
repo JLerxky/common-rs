@@ -78,15 +78,26 @@ pub struct RESTfulResponse<T: Serialize> {
 
 impl<T: Serialize> IntoResponse for RESTfulResponse<T> {
     fn into_response(self) -> Response {
-        (
-            StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-            Json(json!({
-                "code": self.code,
-                "message": self.message,
-                "data": self.data,
-            })),
-        )
-            .into_response()
+        if let Some(data) = self.data {
+            (
+                StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(json!({
+                    "code": self.code,
+                    "message": self.message,
+                    "data": data,
+                })),
+            )
+                .into_response()
+        } else {
+            (
+                StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                Json(json!({
+                    "code": self.code,
+                    "message": self.message,
+                })),
+            )
+                .into_response()
+        }
     }
 }
 
