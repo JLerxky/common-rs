@@ -33,9 +33,11 @@ pub struct ConsulConfig {
 }
 
 pub async fn service_register(
-    http_client: &Client<HttpConnector, Body>,
+    http_client: Option<Client<HttpConnector, Body>>,
     config: &ConsulConfig,
 ) -> Result<()> {
+    let http_client = http_client.unwrap_or(Client::builder().build(HttpConnector::new()));
+
     let uri = format!("{}/v1/agent/service/register", config.consul_addr);
     let request = Request::builder()
             .method(Method::PUT)
