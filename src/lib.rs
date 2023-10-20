@@ -21,6 +21,9 @@
     unused_extern_crates
 )]
 
+#[cfg(feature = "config")]
+pub mod configure;
+
 #[cfg(feature = "consul")]
 pub mod consul;
 

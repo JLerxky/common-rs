@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use anyhow::{anyhow, Result};
-use hyper::{client::HttpConnector, Body, Client, Method, Request, StatusCode};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -32,36 +32,25 @@ pub struct ConsulConfig {
     pub check_deregister_critical_service_after: String,
 }
 
-pub async fn service_register(
-    http_client: Option<Client<HttpConnector, Body>>,
-    config: &ConsulConfig,
-) -> Result<()> {
-    let http_client = http_client.unwrap_or(Client::builder().build(HttpConnector::new()));
-
+pub async fn service_register(config: &ConsulConfig) -> Result<()> {
     let uri = format!("{}/v1/agent/service/register", config.consul_addr);
-    let request = Request::builder()
-            .method(Method::PUT)
-            .uri(uri)
-            .body(json!({
-                "ID": config.service_id,
-                "Name": config.service_name,
-                "Port": config.service_port,
-                "Tags": config.tags,
-                "Address": config.service_address,
-                "Check": {
-                    "Name": config.service_name.clone() + "_check",
-                    "DeregisterCriticalServiceAfter": config.check_deregister_critical_service_after,
-                    "HTTP": format!("http://{}:{}{}", config.service_address, config.service_port, config.check_http_path),
-                    "Interval": config.check_interval,
-                    "Timeout": config.check_timeout,
-                }
-            }).to_string().into())
-            .map_err(|e| anyhow!("build consul register request failed: {e}"))?;
 
-    let rsp = http_client
-        .request(request)
-        .await
+    let rsp = reqwest::Client::default().put(uri).body(json!({
+            "ID": config.service_id,
+            "Name": config.service_name,
+            "Port": config.service_port,
+            "Tags": config.tags,
+            "Address": config.service_address,
+            "Check": {
+                "Name": config.service_name.clone() + "_check",
+                "DeregisterCriticalServiceAfter": config.check_deregister_critical_service_after,
+                "HTTP": format!("http://{}:{}{}", config.service_address, config.service_port, config.check_http_path),
+                "Interval": config.check_interval,
+                "Timeout": config.check_timeout,
+            }
+        }).to_string()).send().await
         .map_err(|e| anyhow!("register to consul failed: {e}"))?;
+
     if rsp.status() != StatusCode::OK {
         Err(anyhow!("register to consul failed: {rsp:?}"))
     } else {
