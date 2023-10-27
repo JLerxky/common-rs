@@ -20,6 +20,8 @@ use axum::{
 };
 use serde::Serialize;
 use serde_json::json;
+use tokio::signal;
+use tracing::info;
 
 #[derive(Debug)]
 pub struct RESTfulError {
@@ -122,4 +124,30 @@ pub fn err(code: u16, message: String) -> RESTfulError {
         code,
         err: anyhow::anyhow!(message),
     }
+}
+
+pub async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    info!("signal received, starting graceful shutdown");
 }
