@@ -16,6 +16,7 @@ use anyhow::{anyhow, Result};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tracing::debug;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -55,5 +56,29 @@ pub async fn service_register(config: &ConsulConfig) -> Result<()> {
         Err(anyhow!("register to consul failed: {rsp:?}"))
     } else {
         Ok(())
+    }
+}
+
+pub async fn read_raw_key(consul_addr: &str, key: &str) -> Result<String> {
+    let uri = format!("{}/v1/kv/{}?raw", consul_addr, key);
+
+    let rsp = reqwest::Client::default()
+        .get(uri)
+        .send()
+        .await
+        .map_err(|e| anyhow!("read key from consul failed: {e}"))?;
+
+    if rsp.status().is_success() {
+        let raw_value = std::str::from_utf8(
+            &rsp.bytes()
+                .await
+                .map_err(|e| anyhow!("read key from consul failed: {e}"))?,
+        )
+        .map_err(|e| anyhow!("raw_value from_utf8 failed: {e}"))?
+        .to_string();
+        debug!("get raw_value from consul: {}", raw_value);
+        Ok(raw_value)
+    } else {
+        Err(anyhow!("read key from consul failed: {rsp:?}"))
     }
 }
