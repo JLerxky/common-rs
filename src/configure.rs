@@ -12,12 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
+use std::{fmt::Debug, path::Path, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use axum::async_trait;
-use config::{AsyncSource, Config, ConfigError, FileFormat, Format, Map};
+use config::{AsyncSource, Config, ConfigError, FileFormat, Map};
+use figment::{
+    providers::{Format, Toml},
+    Figment,
+};
+use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
+use parking_lot::RwLock;
 use serde::Deserialize;
+use tracing::{error, info};
 
 pub fn file_config<T: for<'a> Deserialize<'a>>(path: &str) -> Result<T> {
     let settings = Config::builder()
@@ -42,13 +49,13 @@ pub async fn async_config(uri: &str) -> Result<Config> {
 }
 
 #[derive(Debug)]
-pub struct HttpSource<F: Format> {
+pub struct HttpSource<F: config::Format> {
     uri: String,
     format: F,
 }
 
 #[async_trait]
-impl<F: Format + Send + Sync + Debug> AsyncSource for HttpSource<F> {
+impl<F: config::Format + Send + Sync + Debug> AsyncSource for HttpSource<F> {
     async fn collect(&self) -> Result<Map<String, config::Value>, ConfigError> {
         reqwest::get(&self.uri)
             .await
@@ -62,4 +69,33 @@ impl<F: Format + Send + Sync + Debug> AsyncSource for HttpSource<F> {
                     .map_err(ConfigError::Foreign)
             })
     }
+}
+
+pub async fn hot_reload<T: for<'a> Deserialize<'a> + Sync + Send + 'static>(
+    config: Arc<RwLock<T>>,
+    config_path: String,
+) -> Result<()> {
+    let config_path_clone = config_path.clone();
+    // reload config
+    let mut watcher = RecommendedWatcher::new(
+        move |result: Result<Event, notify::Error>| {
+            let event = result.unwrap();
+
+            if event.kind.is_modify() {
+                match Figment::new()
+                    .join(Toml::file(&config_path_clone))
+                    .extract()
+                {
+                    Ok(new_config) => {
+                        info!("reloading config");
+                        *config.write() = new_config;
+                    }
+                    Err(error) => error!("Error reloading config: {:?}", error),
+                }
+            }
+        },
+        notify::Config::default(),
+    )?;
+    watcher.watch(Path::new(&config_path), RecursiveMode::Recursive)?;
+    Ok(())
 }
