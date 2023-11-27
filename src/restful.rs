@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use axum::{
+    body::Body,
     http::{Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
@@ -54,7 +55,7 @@ where
     }
 }
 
-pub async fn handle_http_error<B>(req: Request<B>, next: Next<B>) -> impl IntoResponse {
+pub async fn handle_http_error(req: Request<Body>, next: Next) -> impl IntoResponse {
     let response = next.run(req).await;
     let status_code = response.status();
     match status_code {
