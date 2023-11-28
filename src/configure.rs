@@ -14,8 +14,8 @@
 
 use std::{fmt::Debug, path::Path, sync::Arc};
 
-use anyhow::{anyhow, Result};
-use axum::async_trait;
+use async_trait::async_trait;
+use color_eyre::eyre::{eyre, Result};
 use config::{AsyncSource, Config, ConfigError, FileFormat, Map};
 use figment::{
     providers::{Format, Toml},
@@ -30,11 +30,11 @@ pub fn file_config<T: for<'a> Deserialize<'a>>(path: &str) -> Result<T> {
     let settings = Config::builder()
         .add_source(config::File::with_name(path))
         .build()
-        .map_err(|e| anyhow!("load file config failed: {}", e))?;
+        .map_err(|e| eyre!("load file config failed: {}", e))?;
 
     settings
         .try_deserialize::<T>()
-        .map_err(|e| anyhow!("deserialize config failed: {}", e))
+        .map_err(|e| eyre!("deserialize config failed: {}", e))
 }
 
 pub async fn async_config(uri: &str) -> Result<Config> {
@@ -45,7 +45,7 @@ pub async fn async_config(uri: &str) -> Result<Config> {
         })
         .build()
         .await
-        .map_err(|e| anyhow!("load async config failed: {}", e))
+        .map_err(|e| eyre!("load async config failed: {}", e))
 }
 
 #[derive(Debug)]
@@ -71,7 +71,7 @@ impl<F: config::Format + Send + Sync + Debug> AsyncSource for HttpSource<F> {
     }
 }
 
-pub async fn hot_reload<T: for<'a> Deserialize<'a> + Sync + Send + 'static>(
+pub fn config_hot_reload<T: for<'a> Deserialize<'a> + Sync + Send + 'static>(
     config: Arc<RwLock<T>>,
     config_path: String,
 ) -> Result<()> {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::{anyhow, Result};
+use color_eyre::eyre::{eyre, Result};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -50,10 +50,10 @@ pub async fn service_register(config: &ConsulConfig) -> Result<()> {
                 "Timeout": config.check_timeout,
             }
         }).to_string()).send().await
-        .map_err(|e| anyhow!("register to consul failed: {e}"))?;
+        .map_err(|e| eyre!("register to consul failed: {e}"))?;
 
     if rsp.status() != StatusCode::OK {
-        Err(anyhow!("register to consul failed: {rsp:?}"))
+        Err(eyre!("register to consul failed: {rsp:?}"))
     } else {
         Ok(())
     }
@@ -66,19 +66,19 @@ pub async fn read_raw_key(consul_addr: &str, key: &str) -> Result<String> {
         .get(uri)
         .send()
         .await
-        .map_err(|e| anyhow!("read key from consul failed: {e}"))?;
+        .map_err(|e| eyre!("read key from consul failed: {e}"))?;
 
     if rsp.status().is_success() {
         let raw_value = std::str::from_utf8(
             &rsp.bytes()
                 .await
-                .map_err(|e| anyhow!("read key from consul failed: {e}"))?,
+                .map_err(|e| eyre!("read key from consul failed: {e}"))?,
         )
-        .map_err(|e| anyhow!("raw_value from_utf8 failed: {e}"))?
+        .map_err(|e| eyre!("raw_value from_utf8 failed: {e}"))?
         .to_string();
         debug!("get raw_value from consul: {}", raw_value);
         Ok(raw_value)
     } else {
-        Err(anyhow!("read key from consul failed: {rsp:?}"))
+        Err(eyre!("read key from consul failed: {rsp:?}"))
     }
 }

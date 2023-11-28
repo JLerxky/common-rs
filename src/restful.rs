@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-    middleware::Next,
-    response::{IntoResponse, Response},
-    Json,
-};
+use color_eyre::eyre::{eyre, Error};
+use salvo::{catcher::Catcher, prelude::*};
 use serde::Serialize;
 use serde_json::json;
 use tokio::signal;
@@ -27,25 +22,25 @@ use tracing::info;
 #[derive(Debug)]
 pub struct RESTfulError {
     code: u16,
-    err: anyhow::Error,
+    err: Error,
 }
 
-impl IntoResponse for RESTfulError {
-    fn into_response(self) -> Response {
-        (
+#[async_trait]
+impl Writer for RESTfulError {
+    async fn write(mut self, _req: &mut Request, _depot: &mut Depot, res: &mut Response) {
+        res.status_code(
             StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-            Json(json!({
-                "code": self.code,
-                "message": self.err.to_string(),
-            })),
-        )
-            .into_response()
+        );
+        res.render(Json(json!({
+            "code": self.code,
+            "message": self.err.to_string(),
+        })));
     }
 }
 
 impl<E> From<E> for RESTfulError
 where
-    E: Into<anyhow::Error>,
+    E: Into<Error>,
 {
     fn from(err: E) -> Self {
         Self {
@@ -55,20 +50,50 @@ where
     }
 }
 
-pub async fn handle_http_error(req: Request<Body>, next: Next) -> impl IntoResponse {
-    let response = next.run(req).await;
-    let status_code = response.status();
-    match status_code {
-        StatusCode::OK | StatusCode::INTERNAL_SERVER_ERROR => response,
-        _ => (
-            status_code,
-            Json(json!({
-                "code": status_code.as_u16(),
-                "message": status_code.canonical_reason().unwrap_or_default(),
-            })),
-        )
-            .into_response(),
+#[handler]
+async fn handle_http_error(
+    &self,
+    _req: &Request,
+    _depot: &Depot,
+    res: &mut Response,
+    ctrl: &mut FlowCtrl,
+) {
+    if let Some(status_code) = res.status_code {
+        match status_code {
+            StatusCode::OK | StatusCode::INTERNAL_SERVER_ERROR => {}
+            _ => {
+                res.render(Json(json!({
+                    "code": status_code.as_u16(),
+                    "message": status_code.canonical_reason().unwrap_or_default(),
+                })));
+            }
+        }
+        ctrl.skip_rest();
     }
+}
+
+#[handler]
+async fn health() -> impl Writer {
+    ok_no_data()
+}
+
+pub async fn http_serve(service_name: &str, port: u16, router: Router) {
+    let router = router.push(Router::with_path("health").get(health));
+
+    let doc = OpenApi::new(format!("{} api", service_name), "0.0.1").merge_router(&router);
+
+    let router = router
+        .unshift(doc.into_router("/api-doc/openapi.json"))
+        .unshift(SwaggerUi::new("/api-doc/openapi.json").into_router("swagger-ui"));
+
+    let service = Service::new(router).catcher(Catcher::default().hoop(handle_http_error));
+
+    let acceptor = TcpListener::new(format!("0.0.0.0:{}", port)).bind().await;
+
+    Server::new(acceptor)
+        .serve_with_graceful_shutdown(service, async move { shutdown_signal().await }, None)
+        .await;
+    info!("{service_name} listening on 0.0.0.0:{port}");
 }
 
 #[derive(Debug, Serialize)]
@@ -79,32 +104,30 @@ pub struct RESTfulResponse<T: Serialize> {
     data: Option<T>,
 }
 
-impl<T: Serialize> IntoResponse for RESTfulResponse<T> {
-    fn into_response(self) -> Response {
+unsafe impl<T: Serialize> Send for RESTfulResponse<T> {}
+
+#[async_trait]
+impl<T: Serialize> Writer for RESTfulResponse<T> {
+    async fn write(mut self, _req: &mut Request, _depot: &mut Depot, res: &mut Response) {
+        res.status_code(
+            StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+        );
         if let Some(data) = self.data {
-            (
-                StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                Json(json!({
-                    "code": self.code,
-                    "message": self.message,
-                    "data": data,
-                })),
-            )
-                .into_response()
+            res.render(Json(json!({
+                "code": self.code,
+                "message": self.message,
+                "data": data,
+            })));
         } else {
-            (
-                StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                Json(json!({
-                    "code": self.code,
-                    "message": self.message,
-                })),
-            )
-                .into_response()
+            res.render(Json(json!({
+                "code": self.code,
+                "message": self.message,
+            })));
         }
     }
 }
 
-pub fn ok<T: Serialize>(data: T) -> Result<impl IntoResponse, RESTfulError> {
+pub fn ok<T: Serialize>(data: T) -> Result<impl Writer, RESTfulError> {
     Ok(RESTfulResponse {
         code: 200,
         message: "OK".to_string(),
@@ -112,7 +135,7 @@ pub fn ok<T: Serialize>(data: T) -> Result<impl IntoResponse, RESTfulError> {
     })
 }
 
-pub fn ok_no_data() -> Result<impl IntoResponse, RESTfulError> {
+pub fn ok_no_data() -> Result<impl Writer, RESTfulError> {
     Ok(RESTfulResponse::<()> {
         code: 200,
         message: "OK".to_string(),
@@ -123,11 +146,11 @@ pub fn ok_no_data() -> Result<impl IntoResponse, RESTfulError> {
 pub fn err(code: u16, message: String) -> RESTfulError {
     RESTfulError {
         code,
-        err: anyhow::anyhow!(message),
+        err: eyre!(message),
     }
 }
 
-pub async fn shutdown_signal() {
+async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
             .await

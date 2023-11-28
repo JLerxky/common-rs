@@ -12,15 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![forbid(unsafe_code)]
-#![warn(
-    missing_copy_implementations,
-    missing_debug_implementations,
-    unused_crate_dependencies,
-    clippy::missing_const_for_fn,
-    unused_extern_crates
-)]
-
 #[cfg(feature = "config")]
 pub mod configure;
 

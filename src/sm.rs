@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::{anyhow, Result};
+use color_eyre::eyre::{eyre, Result};
 use efficient_sm2::{KeyPair, PublicKey, Signature};
 
 pub const SM2_SIGNATURE_BYTES_LEN: usize = 128;
@@ -22,7 +22,7 @@ pub const ADDR_BYTES_LEN: usize = 20;
 
 pub fn private_key_to_public_key(private_key: &[u8]) -> Result<[u8; SM2_PUBLIC_KEY_LEN]> {
     let key_pair = efficient_sm2::KeyPair::new(private_key)
-        .map_err(|e| anyhow::anyhow!("create sm key_pair failed: {e:?}"))?;
+        .map_err(|e| eyre!("create sm key_pair failed: {e:?}"))?;
     let mut public_key_bytes = [0u8; SM2_PUBLIC_KEY_LEN];
     public_key_bytes.copy_from_slice(&key_pair.public_key().bytes_less_safe()[1..]);
     Ok(public_key_bytes)
@@ -30,10 +30,10 @@ pub fn private_key_to_public_key(private_key: &[u8]) -> Result<[u8; SM2_PUBLIC_K
 
 pub fn sign(pubkey: &[u8], privkey: &[u8], msg: &[u8]) -> Result<[u8; SM2_SIGNATURE_BYTES_LEN]> {
     let key_pair =
-        KeyPair::new(privkey).map_err(|e| anyhow!("sm sign: KeyPair_new failed: {:?}", e))?;
+        KeyPair::new(privkey).map_err(|e| eyre!("sm sign: KeyPair_new failed: {:?}", e))?;
     let sig = key_pair
         .sign(msg)
-        .map_err(|e| anyhow!("sm sign: KeyPair_sign failed: {:?}", e))?;
+        .map_err(|e| eyre!("sm sign: KeyPair_sign failed: {:?}", e))?;
 
     let mut sig_bytes = [0u8; SM2_SIGNATURE_BYTES_LEN];
     sig_bytes[..32].copy_from_slice(&sig.r());
@@ -44,14 +44,14 @@ pub fn sign(pubkey: &[u8], privkey: &[u8], msg: &[u8]) -> Result<[u8; SM2_SIGNAT
 
 pub fn verify(address: &[u8], signature: &[u8], message: &[u8]) -> Result<()> {
     if signature.len() != SM2_SIGNATURE_BYTES_LEN {
-        return Err(anyhow!(
+        return Err(eyre!(
             "sm verify: signature length is not {}",
             SM2_SIGNATURE_BYTES_LEN
         ));
     }
 
     if address != recover(signature, message)? {
-        Err(anyhow!("sm verify: address is not match"))
+        Err(eyre!("sm verify: address is not match"))
     } else {
         Ok(())
     }
@@ -76,10 +76,10 @@ fn recover(signature: &[u8], message: &[u8]) -> Result<[u8; ADDR_BYTES_LEN]> {
 
     let public_key = PublicKey::new(&pk[..32], &pk[32..]);
     let sig =
-        Signature::new(r, s).map_err(|e| anyhow!("sm recover: Signature_new failed: {:?}", e))?;
+        Signature::new(r, s).map_err(|e| eyre!("sm recover: Signature_new failed: {:?}", e))?;
 
     sig.verify(&public_key, message)
-        .map_err(|e| anyhow!("sm recover: Signature_verify failed: {:?}", e))?;
+        .map_err(|e| eyre!("sm recover: Signature_verify failed: {:?}", e))?;
 
     Ok(pk2address(pk))
 }
