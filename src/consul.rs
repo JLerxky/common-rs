@@ -16,7 +16,6 @@ use color_eyre::eyre::{eyre, Result};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tracing::debug;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(default)]

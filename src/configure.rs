@@ -17,14 +17,9 @@ use std::{fmt::Debug, path::Path, sync::Arc};
 use async_trait::async_trait;
 use color_eyre::eyre::{eyre, Result};
 use config::{AsyncSource, Config, ConfigError, FileFormat, Map};
-use figment::{
-    providers::{Format, Toml},
-    Figment,
-};
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::RwLock;
 use serde::Deserialize;
-use tracing::{error, info};
 
 pub fn file_config<T: for<'a> Deserialize<'a>>(path: &str) -> Result<T> {
     let settings = Config::builder()
@@ -82,10 +77,7 @@ pub fn config_hot_reload<T: for<'a> Deserialize<'a> + Sync + Send + 'static>(
             let event = result.unwrap();
 
             if event.kind.is_modify() {
-                match Figment::new()
-                    .join(Toml::file(&config_path_clone))
-                    .extract()
-                {
+                match file_config(&config_path_clone) {
                     Ok(new_config) => {
                         info!("reloading config");
                         *config.write() = new_config;

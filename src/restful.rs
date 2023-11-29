@@ -17,7 +17,6 @@ use salvo::{catcher::Catcher, prelude::*};
 use serde::Serialize;
 use serde_json::json;
 use tokio::signal;
-use tracing::info;
 
 #[derive(Debug)]
 pub struct RESTfulError {
