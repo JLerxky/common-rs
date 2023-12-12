@@ -18,6 +18,8 @@ use serde::Serialize;
 use serde_json::json;
 use tokio::signal;
 
+pub type HttpServerHandle = salvo::server::ServerHandle;
+
 #[derive(Debug)]
 pub struct RESTfulError {
     code: u16,
@@ -89,10 +91,10 @@ pub async fn http_serve(service_name: &str, port: u16, router: Router) {
 
     let acceptor = TcpListener::new(format!("0.0.0.0:{}", port)).bind().await;
 
-    Server::new(acceptor)
-        .serve_with_graceful_shutdown(service, async move { shutdown_signal().await }, None)
-        .await;
-    info!("{service_name} listening on 0.0.0.0:{port}");
+    let server = Server::new(acceptor);
+    let handle = server.handle();
+    tokio::spawn(shutdown_signal(handle));
+    server.serve(service).await;
 }
 
 #[derive(Debug, Serialize)]
@@ -149,7 +151,7 @@ pub fn err(code: u16, message: String) -> RESTfulError {
     }
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(handle: HttpServerHandle) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -168,9 +170,8 @@ async fn shutdown_signal() {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
+        _ = ctrl_c => info!("ctrl_c signal received"),
+        _ = terminate => info!("terminate signal received"),
     }
-
-    info!("signal received, starting graceful shutdown");
+    handle.stop_graceful(None);
 }
