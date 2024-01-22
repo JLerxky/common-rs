@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use color_eyre::eyre::{eyre, Result};
+use std::collections::HashMap;
+
+use color_eyre::eyre::{eyre, Ok, Result};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -32,7 +34,7 @@ pub struct ConsulConfig {
     pub check_deregister_critical_service_after: String,
 }
 
-pub async fn service_register(config: &ConsulConfig) -> Result<()> {
+async fn put_service_register(config: &ConsulConfig) -> Result<()> {
     let uri = format!("{}/v1/agent/service/register", config.consul_addr);
 
     let rsp = reqwest::Client::default().put(uri).body(json!({
@@ -54,7 +56,41 @@ pub async fn service_register(config: &ConsulConfig) -> Result<()> {
     if rsp.status() != StatusCode::OK {
         Err(eyre!("register to consul failed: {rsp:?}"))
     } else {
+        debug!("register to consul: {:?}", config);
         Ok(())
+    }
+}
+
+pub async fn service_register(config: &ConsulConfig) -> Result<()> {
+    let registered_services = get_registered_services(config).await?;
+    if registered_services.contains_key(&config.service_name) {
+        Ok(())
+    } else {
+        put_service_register(config).await
+    }
+}
+
+pub async fn get_registered_services(
+    config: &ConsulConfig,
+) -> Result<HashMap<String, Vec<String>>> {
+    let uri = format!("{}/v1/catalog/services", config.consul_addr);
+
+    let rsp = reqwest::Client::default()
+        .get(uri)
+        .send()
+        .await
+        .map_err(|e| eyre!("consul get all_registered_services failed: {e}"))?;
+
+    if rsp.status() != StatusCode::OK {
+        Err(eyre!("consul get all_registered_services failed: {rsp:?}"))
+    } else {
+        let service_tags_by_name = serde_json::from_slice::<HashMap<String, Vec<String>>>(
+            &rsp.bytes()
+                .await
+                .map_err(|e| eyre!("all_registered_services read bytes failed: {e}"))?,
+        )
+        .map_err(|e| eyre!("all_registered_services decode service_tags_by_name failed: {e}"))?;
+        Ok(service_tags_by_name)
     }
 }
 
