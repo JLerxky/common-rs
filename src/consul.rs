@@ -25,13 +25,13 @@ pub struct ConsulConfig {
     pub consul_addr: String,
     pub tags: Vec<String>,
     pub service_name: String,
-    pub service_id: String,
-    pub service_address: String,
+    service_id: String,
+    service_address: String,
     pub service_port: u16,
     pub check_http_path: String,
     pub check_interval: String,
     pub check_timeout: String,
-    pub check_deregister_critical_service_after: String,
+    pub check_deregister_critical_service_after: u64,
 }
 
 impl Default for ConsulConfig {
@@ -46,12 +46,32 @@ impl Default for ConsulConfig {
             check_http_path: "/health".to_owned(),
             check_interval: "10s".to_owned(),
             check_timeout: "3s".to_owned(),
-            check_deregister_critical_service_after: "1m".to_owned(),
+            check_deregister_critical_service_after: 60,
         }
     }
 }
 
-pub async fn service_register(config: &ConsulConfig) -> Result<()> {
+pub async fn keep_service_register_in_k8s(config: &ConsulConfig) -> Result<()> {
+    let mut config = config.clone();
+    let pod_name = std::env::var("K8S_POD_NAME").unwrap_or_default();
+    let service_name = std::env::var("K8S_SERVICE_NAME").unwrap_or_default();
+    let namespace = std::env::var("K8S_NAMESPACE").unwrap_or_default();
+    config.service_id = format!("{pod_name}-{namespace}");
+    config.service_address = format!("{pod_name}.{service_name}.{namespace}.svc.cluster.local");
+
+    let mut t = tokio::time::interval(tokio::time::Duration::from_secs(
+        config.check_deregister_critical_service_after / 2,
+    ));
+    tokio::spawn(async move {
+        loop {
+            service_register(&config).await.ok();
+            t.tick().await;
+        }
+    });
+    Ok(())
+}
+
+async fn service_register(config: &ConsulConfig) -> Result<()> {
     let uri = format!("{}/v1/agent/service/register", config.consul_addr);
 
     let rsp = reqwest::Client::default().put(uri).body(json!({
@@ -62,7 +82,7 @@ pub async fn service_register(config: &ConsulConfig) -> Result<()> {
             "Address": config.service_address,
             "Check": {
                 "Name": config.service_name.clone() + "_check",
-                "DeregisterCriticalServiceAfter": config.check_deregister_critical_service_after,
+                "DeregisterCriticalServiceAfter": format!("{}s", config.check_deregister_critical_service_after),
                 "HTTP": format!("http://{}:{}{}", config.service_address, config.service_port, config.check_http_path),
                 "Interval": config.check_interval,
                 "Timeout": config.check_timeout,
