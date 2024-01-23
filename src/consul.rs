@@ -51,7 +51,7 @@ impl Default for ConsulConfig {
     }
 }
 
-async fn put_service_register(config: &ConsulConfig) -> Result<()> {
+pub async fn put_service_register(config: &ConsulConfig) -> Result<()> {
     let uri = format!("{}/v1/agent/service/register", config.consul_addr);
 
     let rsp = reqwest::Client::default().put(uri).body(json!({
