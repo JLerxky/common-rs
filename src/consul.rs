@@ -19,7 +19,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ConsulConfig {
     pub consul_addr: String,
@@ -32,6 +32,23 @@ pub struct ConsulConfig {
     pub check_interval: String,
     pub check_timeout: String,
     pub check_deregister_critical_service_after: String,
+}
+
+impl Default for ConsulConfig {
+    fn default() -> Self {
+        Self {
+            consul_addr: Default::default(),
+            tags: Default::default(),
+            service_name: Default::default(),
+            service_id: Default::default(),
+            service_address: Default::default(),
+            service_port: 80,
+            check_http_path: "/health".to_owned(),
+            check_interval: "10s".to_owned(),
+            check_timeout: "3s".to_owned(),
+            check_deregister_critical_service_after: "1m".to_owned(),
+        }
+    }
 }
 
 async fn put_service_register(config: &ConsulConfig) -> Result<()> {
