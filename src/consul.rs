@@ -64,7 +64,9 @@ pub async fn keep_service_register_in_k8s(config: &ConsulConfig) -> Result<()> {
     ));
     tokio::spawn(async move {
         loop {
-            service_register(&config).await.ok();
+            if let Err(e) = service_register(&config).await {
+                error!("{e}");
+            }
             t.tick().await;
         }
     });
