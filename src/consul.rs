@@ -93,7 +93,6 @@ async fn service_register(config: &ConsulConfig) -> Result<()> {
     if rsp.status() != StatusCode::OK {
         Err(eyre!("register to consul failed: {rsp:?}"))
     } else {
-        debug!("register to consul: {:?}", config);
         Ok(())
     }
 }
