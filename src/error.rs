@@ -30,11 +30,30 @@ pub enum CALError {
     TooManyRequests = 429,
     #[error("Internal Server Error")]
     InternalServerError = 500,
+    #[error("Not Implemented")]
+    NotImplemented = 501,
+    #[error("Bad Gateway")]
+    BadGateway = 502,
     #[error("Service Unavailable")]
     ServiceUnavailable = 503,
+    #[error("Gateway Timeout")]
+    GatewayTimeout = 504,
+
+    #[error("Chain Error")]
+    ChainError = 1000,
+
+    #[error("Transaction Error")]
+    TransactionError = 2000,
+    #[error("Transaction Timeout")]
+    TransactionTimeout = 2001,
+    #[error("Transaction Reverted")]
+    TransactionReverted = 2002,
+
+    #[error("KMS Error")]
+    KMSError = 3000,
 
     #[error("External Error")]
-    ExternalError = 1000,
+    ExternalError = 4000,
     #[error("Cita CMC Create Failed")]
-    CitaCMCCreateFailed = 1001,
+    CitaCMCCreateFailed = 4001,
 }
