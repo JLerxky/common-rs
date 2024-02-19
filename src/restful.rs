@@ -12,18 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use color_eyre::eyre::{eyre, Error};
+use std::fmt::{Display, Formatter};
+
+use color_eyre::eyre::Error;
 use salvo::{catcher::Catcher, prelude::*};
 use serde::Serialize;
 use serde_json::json;
 use tokio::signal;
 
+use crate::error::CALError;
+
 pub type HttpServerHandle = salvo::server::ServerHandle;
 
 #[derive(Debug)]
 pub struct RESTfulError {
-    code: u16,
-    err: Error,
+    pub code: u16,
+    pub err: String,
+}
+
+impl Display for RESTfulError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "code: {}, message: {}", self.code, self.err)
+    }
 }
 
 #[async_trait]
@@ -44,9 +54,15 @@ where
     E: Into<Error>,
 {
     fn from(err: E) -> Self {
-        Self {
-            code: 500,
-            err: err.into(),
+        match err.into().downcast::<CALError>() {
+            Ok(err) => Self {
+                code: err.into(),
+                err: err.to_string(),
+            },
+            Err(err) => Self {
+                code: CALError::InternalServerError.into(),
+                err: err.to_string(),
+            },
         }
     }
 }
@@ -144,11 +160,34 @@ pub fn ok_no_data() -> Result<impl Writer, RESTfulError> {
     })
 }
 
-pub fn err(code: u16, message: String) -> RESTfulError {
-    RESTfulError {
-        code,
-        err: eyre!(message),
-    }
+pub fn err<W>(code: CALError, message: &str) -> Result<W, RESTfulError>
+where
+    W: Writer,
+{
+    Err(RESTfulError {
+        code: code.into(),
+        err: message.to_owned(),
+    })
+}
+
+pub fn err_code<W>(code: CALError) -> Result<W, RESTfulError>
+where
+    W: Writer,
+{
+    Err(RESTfulError {
+        code: code.into(),
+        err: code.to_string(),
+    })
+}
+
+pub fn err_msg<W>(message: &str) -> Result<W, RESTfulError>
+where
+    W: Writer,
+{
+    Err(RESTfulError {
+        code: CALError::InternalServerError.into(),
+        err: message.to_owned(),
+    })
 }
 
 async fn shutdown_signal(handle: HttpServerHandle) {

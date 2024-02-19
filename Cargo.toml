@@ -1,6 +1,6 @@
 [package]
 name = "common-rs"
-version = "1.0.1"
+version = "1.1.0"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["Rivtower Technologies <contact@rivtower.com>"]
@@ -15,16 +15,18 @@ sm = ["dep:efficient-sm2", "dep:libsm"]
 [dependencies]
 async-trait = "0.1"
 color-eyre = "0.6"
-config = { version = "0.13", optional = true }
+config = { version = "0.14", optional = true }
 efficient-sm2 = { version = "0.2", optional = true }
 notify = { version = "6.1", features = ["serde"] }
 parking_lot = "0.12"
 libsm = { version = "0.6", optional = true }
+num_enum = "0.7"
 reqwest = { version = "0.11", optional = true }
-salvo = { version = "0.65", features = ["oapi"], optional = true }
+salvo = { version = "0.66", features = ["oapi"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
-tokio = { version = "1.35", features = ["signal", "macros"], optional = true }
+thiserror = "1.0"
+tokio = { version = "1.36", features = ["signal", "macros"], optional = true }
 tracing = "0.1"
 
 [lints.rust]
