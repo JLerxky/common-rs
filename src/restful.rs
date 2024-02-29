@@ -19,6 +19,7 @@ use salvo::{catcher::Catcher, prelude::*};
 use serde::Serialize;
 use serde_json::json;
 use tokio::signal;
+use tracing::info;
 
 use crate::error::CALError;
 

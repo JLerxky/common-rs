@@ -20,6 +20,7 @@ use config::{AsyncSource, Config, ConfigError, FileFormat, Map};
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::RwLock;
 use serde::Deserialize;
+use tracing::{error, info};
 
 pub fn file_config<T: for<'a> Deserialize<'a>>(path: &str) -> Result<T> {
     let settings = Config::builder()

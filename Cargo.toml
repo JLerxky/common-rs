@@ -6,32 +6,46 @@ license = "Apache-2.0"
 authors = ["Rivtower Technologies <contact@rivtower.com>"]
 
 [features]
-default = ["restful", "config", "consul", "sm"]
-config = ["dep:config", "dep:reqwest"]
-consul = ["dep:reqwest"]
-restful = ["dep:salvo", "dep:serde", "dep:serde_json", "dep:tokio"]
+default = ["config", "etcd", "restful", "sm"]
+config = [
+    "dep:async-trait",
+    "dep:config",
+    "dep:reqwest",
+    "dep:notify",
+    "dep:parking_lot",
+    "dep:serde",
+    "dep:tracing",
+]
+etcd = ["dep:etcd-client", "dep:tokio", "dep:serde"]
+restful = [
+    "dep:salvo",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:tokio",
+    "dep:tracing",
+]
 sm = ["dep:efficient-sm2", "dep:libsm"]
 
 [dependencies]
-async-trait = "0.1"
+async-trait = { version = "0.1", optional = true }
 color-eyre = "0.6"
 config = { version = "0.14", optional = true }
 efficient-sm2 = { version = "0.2", optional = true }
-notify = { version = "6.1", features = ["serde"] }
-parking_lot = "0.12"
-libsm = { version = "0.6", optional = true }
+etcd-client = { version = "0.12", optional = true }
+notify = { version = "6.1", features = ["serde"], optional = true }
 num_enum = "0.7"
+parking_lot = { version = "0.12", optional = true }
+libsm = { version = "0.6", optional = true }
 reqwest = { version = "0.11", optional = true }
 salvo = { version = "0.66", features = ["oapi"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 thiserror = "1.0"
 tokio = { version = "1.36", features = ["signal", "macros"], optional = true }
-tracing = "0.1"
+tracing = { version = "0.1", optional = true }
 
 [lints.rust]
 missing_copy_implementations = "warn"
-missing_debug_implementations = "warn"
 unused_crate_dependencies = "warn"
 unused_extern_crates = "warn"
 
