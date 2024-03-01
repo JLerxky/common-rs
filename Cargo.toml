@@ -6,7 +6,7 @@ license = "Apache-2.0"
 authors = ["Rivtower Technologies <contact@rivtower.com>"]
 
 [features]
-default = ["log"]
+default = ["config", "etcd", "log", "restful", "sm"]
 config = [
     "dep:async-trait",
     "dep:config",

@@ -153,8 +153,6 @@ impl Etcd {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ServiceRegisterConfig {
-    pub service_name: String,
-    pub port: u16,
     pub tags: Vec<String>,
     pub ttl: i64,
 }
@@ -162,8 +160,6 @@ pub struct ServiceRegisterConfig {
 impl Default for ServiceRegisterConfig {
     fn default() -> Self {
         Self {
-            service_name: Default::default(),
-            port: 3000,
             tags: Default::default(),
             ttl: 60,
         }
@@ -171,24 +167,29 @@ impl Default for ServiceRegisterConfig {
 }
 
 impl Etcd {
-    pub async fn keep_service_register_in_k8s(&self, config: ServiceRegisterConfig) -> Result<()> {
+    pub async fn keep_service_register_in_k8s(
+        &self,
+        service_name: &str,
+        service_port: u16,
+        config: ServiceRegisterConfig,
+    ) -> Result<()> {
         let pod_name = std::env::var("K8S_POD_NAME").unwrap_or_default();
         let svc_name = std::env::var("K8S_SERVICE_NAME").unwrap_or_default();
         let namespace = std::env::var("K8S_NAMESPACE").unwrap_or_default();
 
         let service_address = format!("{pod_name}.{svc_name}.{namespace}.svc.cluster.local");
-        let url = format!("{}:{}", service_address, config.port);
+        let url = format!("{}:{}", service_address, service_port);
 
         let mut keep_alive_interval =
             tokio::time::interval(tokio::time::Duration::from_secs((config.ttl / 2) as u64));
 
         let etcd = self.clone();
+        let service_name = service_name.to_owned();
         tokio::spawn(async move {
             loop {
                 keep_alive_interval.tick().await;
-                let ServiceRegisterConfig {
-                    service_name, tags, ..
-                } = config.clone();
+                let tags = config.tags.clone();
+                let service_name = service_name.clone();
 
                 etcd.put_or_touch(
                     &format!(
