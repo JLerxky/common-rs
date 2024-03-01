@@ -177,7 +177,7 @@ impl Etcd {
         let svc_name = std::env::var("K8S_SERVICE_NAME").unwrap_or_default();
         let namespace = std::env::var("K8S_NAMESPACE").unwrap_or_default();
 
-        let service_address = format!("{pod_name}.{svc_name}.{namespace}.svc.cluster.local");
+        let service_address = format!("http://{pod_name}.{svc_name}.{namespace}.svc.cluster.local");
         let url = format!("{}:{}", service_address, service_port);
 
         let mut keep_alive_interval =
