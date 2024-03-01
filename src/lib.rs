@@ -18,6 +18,9 @@ pub mod configure;
 #[cfg(feature = "etcd")]
 pub mod etcd;
 
+#[cfg(feature = "log")]
+pub mod log;
+
 #[cfg(feature = "restful")]
 pub mod restful;
 

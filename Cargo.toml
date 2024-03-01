@@ -6,7 +6,7 @@ license = "Apache-2.0"
 authors = ["Rivtower Technologies <contact@rivtower.com>"]
 
 [features]
-default = ["config", "etcd", "restful", "sm"]
+default = ["log"]
 config = [
     "dep:async-trait",
     "dep:config",
@@ -17,6 +17,14 @@ config = [
     "dep:tracing",
 ]
 etcd = ["dep:etcd-client", "dep:tokio", "dep:serde"]
+log = [
+    "dep:chrono",
+    "dep:serde",
+    "dep:time",
+    "dep:tracing",
+    "dep:tracing-appender",
+    "dep:tracing-subscriber",
+]
 restful = [
     "dep:salvo",
     "dep:serde",
@@ -28,6 +36,7 @@ sm = ["dep:efficient-sm2", "dep:libsm"]
 
 [dependencies]
 async-trait = { version = "0.1", optional = true }
+chrono = { version = "0.4", optional = true }
 color-eyre = "0.6"
 config = { version = "0.14", optional = true }
 efficient-sm2 = { version = "0.2", optional = true }
@@ -41,8 +50,14 @@ salvo = { version = "0.66", features = ["oapi"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 thiserror = "1.0"
+time = { version = "0.3", optional = true }
 tokio = { version = "1.36", features = ["signal", "macros"], optional = true }
 tracing = { version = "0.1", optional = true }
+tracing-appender = { version = "0.2", optional = true }
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+    "local-time",
+], optional = true }
 
 [lints.rust]
 missing_copy_implementations = "warn"
