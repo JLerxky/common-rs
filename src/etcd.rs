@@ -153,6 +153,7 @@ impl Etcd {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ServiceRegisterConfig {
+    pub url: String,
     pub tags: Vec<String>,
     pub ttl: i64,
 }
@@ -162,24 +163,17 @@ impl Default for ServiceRegisterConfig {
         Self {
             tags: Default::default(),
             ttl: 60,
+            url: Default::default(),
         }
     }
 }
 
 impl Etcd {
-    pub async fn keep_service_register_in_k8s(
+    pub async fn keep_service_register(
         &self,
         service_name: &str,
-        service_port: u16,
         config: ServiceRegisterConfig,
     ) -> Result<()> {
-        let pod_name = std::env::var("K8S_POD_NAME").unwrap_or_default();
-        let svc_name = std::env::var("K8S_SERVICE_NAME").unwrap_or_default();
-        let namespace = std::env::var("K8S_NAMESPACE").unwrap_or_default();
-
-        let service_address = format!("http://{pod_name}.{svc_name}.{namespace}.svc.cluster.local");
-        let url = format!("{}:{}", service_address, service_port);
-
         let mut keep_alive_interval =
             tokio::time::interval(tokio::time::Duration::from_secs((config.ttl / 2) as u64));
 
@@ -194,9 +188,9 @@ impl Etcd {
                 etcd.put_or_touch(
                     &format!(
                         "traefik/http/services/{}/loadbalancer/servers/{}/url",
-                        service_name, pod_name
+                        service_name, service_name
                     ),
-                    url.clone(),
+                    config.url.clone(),
                     config.ttl,
                 )
                 .await
