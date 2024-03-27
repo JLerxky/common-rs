@@ -20,6 +20,7 @@ use color_eyre::{
 };
 use etcd_client::{Client, ConnectOptions, DeleteOptions, GetOptions, KeyValue as KV, PutOptions};
 use serde::{Deserialize, Serialize};
+use tracing::{error, info};
 
 pub type KeyValue = KV;
 
@@ -174,6 +175,7 @@ impl Etcd {
         service_name: &str,
         config: ServiceRegisterConfig,
     ) -> Result<()> {
+        info!("keep_service_register: {config:?}");
         let mut keep_alive_interval =
             tokio::time::interval(tokio::time::Duration::from_secs((config.ttl / 2) as u64));
 
@@ -185,26 +187,34 @@ impl Etcd {
                 let tags = config.tags.clone();
                 let service_name = service_name.clone();
 
-                etcd.put_or_touch(
-                    &format!(
-                        "traefik/http/services/{}/loadbalancer/servers/{}/url",
-                        service_name, service_name
-                    ),
-                    config.url.clone(),
-                    config.ttl,
-                )
-                .await
-                .ok();
-                etcd.put_or_touch(
-                    &format!("traefik/http/routers/{}/service", service_name),
-                    service_name,
-                    config.ttl,
-                )
-                .await
-                .ok();
+                if let Err(e) = etcd
+                    .put_or_touch(
+                        &format!(
+                            "traefik/http/services/{}/loadbalancer/servers/{}/url",
+                            service_name, service_name
+                        ),
+                        config.url.clone(),
+                        config.ttl,
+                    )
+                    .await
+                {
+                    error!("keep_service_register failed: {:?}", e);
+                }
+                if let Err(e) = etcd
+                    .put_or_touch(
+                        &format!("traefik/http/routers/{}/service", service_name),
+                        service_name,
+                        config.ttl,
+                    )
+                    .await
+                {
+                    error!("keep_service_register failed: {:?}", e);
+                }
                 for tag in tags {
                     let (key, value) = tag.split_once('=').unwrap_or_default();
-                    etcd.put_or_touch(key, value, config.ttl).await.ok();
+                    if let Err(e) = etcd.put_or_touch(key, value, config.ttl).await {
+                        error!("keep_service_register failed: {:?}", e);
+                    }
                 }
             }
         });

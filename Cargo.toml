@@ -16,7 +16,7 @@ config = [
     "dep:serde",
     "dep:tracing",
 ]
-etcd = ["dep:etcd-client", "dep:tokio", "dep:serde"]
+etcd = ["dep:etcd-client", "dep:tokio", "dep:serde", "dep:tracing"]
 log = [
     "dep:chrono",
     "dep:serde",
