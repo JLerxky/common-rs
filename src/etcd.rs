@@ -32,9 +32,9 @@ pub struct Etcd {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EtcdConfig {
-    endpoints: Vec<String>,
-    timeout: u64,
-    keep_alive: u64,
+    pub endpoints: Vec<String>,
+    pub timeout: u64,
+    pub keep_alive: u64,
 }
 
 impl Default for EtcdConfig {
