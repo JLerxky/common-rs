@@ -48,7 +48,7 @@ impl Default for EtcdConfig {
 }
 
 impl Etcd {
-    pub async fn new(config: EtcdConfig) -> Result<Self> {
+    pub async fn new(config: &EtcdConfig) -> Result<Self> {
         let client = Client::connect(
             &config.endpoints,
             Some(
