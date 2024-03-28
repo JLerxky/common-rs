@@ -29,16 +29,37 @@ pub struct Etcd {
     pub client: Client,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EtcdConfig {
+    endpoints: Vec<String>,
+    timeout: u64,
+    keep_alive: u64,
+}
+
+impl Default for EtcdConfig {
+    fn default() -> Self {
+        Self {
+            endpoints: vec!["http://127.0.0.1:2379".to_owned()],
+            timeout: 2000,
+            keep_alive: 300,
+        }
+    }
+}
+
 impl Etcd {
-    pub async fn new(endpoints: Vec<String>) -> Result<Self> {
+    pub async fn new(config: EtcdConfig) -> Result<Self> {
         let client = Client::connect(
-            &endpoints,
+            &config.endpoints,
             Some(
                 ConnectOptions::new()
-                    .with_connect_timeout(Duration::from_secs(2))
-                    .with_keep_alive(Duration::from_secs(300), Duration::from_secs(2))
+                    .with_connect_timeout(Duration::from_millis(config.timeout))
+                    .with_keep_alive(
+                        Duration::from_secs(config.keep_alive),
+                        Duration::from_millis(config.timeout),
+                    )
                     .with_keep_alive_while_idle(true)
-                    .with_timeout(Duration::from_secs(2)),
+                    .with_timeout(Duration::from_millis(config.timeout)),
             ),
         )
         .await
