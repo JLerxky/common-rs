@@ -24,7 +24,12 @@ pub mod log;
 #[cfg(feature = "restful")]
 pub mod restful;
 
+#[cfg(feature = "redis")]
+pub mod redis;
+
 #[cfg(feature = "sm")]
 pub mod sm;
 
 pub mod error;
+
+pub mod service_register;

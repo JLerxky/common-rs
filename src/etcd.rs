@@ -22,6 +22,8 @@ use etcd_client::{Client, ConnectOptions, DeleteOptions, GetOptions, KeyValue as
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
+use crate::service_register::{ServiceRegister, ServiceRegisterConfig};
+
 pub type KeyValue = KV;
 
 #[derive(Clone)]
@@ -170,28 +172,18 @@ impl Etcd {
         }
         Ok(())
     }
-}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ServiceRegisterConfig {
-    pub url: String,
-    pub tags: Vec<String>,
-    pub ttl: i64,
-}
-
-impl Default for ServiceRegisterConfig {
-    fn default() -> Self {
-        Self {
-            tags: Default::default(),
-            ttl: 60,
-            url: Default::default(),
-        }
+    pub async fn service_register(
+        &self,
+        service_name: &str,
+        config: ServiceRegisterConfig,
+    ) -> Result<()> {
+        self.keep_service_register(service_name, config).await
     }
 }
 
-impl Etcd {
-    pub async fn keep_service_register(
+impl ServiceRegister for Etcd {
+    async fn keep_service_register(
         &self,
         service_name: &str,
         config: ServiceRegisterConfig,
