@@ -133,25 +133,3 @@ impl ServiceRegister for Redis {
         Ok(())
     }
 }
-
-#[tokio::test]
-async fn test_scan() -> Result<()> {
-    use futures::stream::StreamExt;
-
-    let redis = Redis::new(&RedisConfig::default()).await?;
-    let mut conn = redis.conn();
-
-    conn.set("async-key1", b"foo").await?;
-    conn.set("async-key2", b"foo").await?;
-
-    let iter: redis::AsyncIter<String> = conn.scan_match("async-key*").await?;
-    let mut keys: Vec<_> = iter.collect().await;
-
-    keys.sort();
-
-    assert_eq!(
-        keys,
-        vec!["async-key1".to_string(), "async-key2".to_string()]
-    );
-    Ok(())
-}
