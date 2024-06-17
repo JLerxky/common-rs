@@ -3,7 +3,7 @@ pub use redis::*;
 
 use serde::{Deserialize, Serialize};
 
-use tracing::{error, info};
+use tracing::{debug, error};
 
 use crate::service_register::{ServiceRegister, ServiceRegisterConfig};
 
@@ -67,6 +67,24 @@ impl Redis {
         self.connection.to_owned()
     }
 
+    pub async fn keep_alive(&mut self) -> Result<()> {
+        cfg_if::cfg_if! {
+            if #[cfg(not(feature = "redis-cluster"))] {
+                if !self.client.check_connection() {
+                    if let Ok(new_conn) = self
+                        .client
+                        .get_multiplexed_async_connection()
+                        .await
+                        .map_err(|e| eyre!("redis connect failed: {e}"))
+                    {
+                        self.connection = new_conn;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub async fn service_register(
         &self,
         service_name: &str,
@@ -82,7 +100,7 @@ impl ServiceRegister for Redis {
         service_name: &str,
         config: ServiceRegisterConfig,
     ) -> Result<()> {
-        info!("keep_service_register: {config:?}");
+        debug!("keep_service_register: {config:#?}");
         let mut keep_alive_interval =
             tokio::time::interval(tokio::time::Duration::from_secs((config.ttl / 2) as u64));
 
@@ -132,4 +150,117 @@ impl ServiceRegister for Redis {
         });
         Ok(())
     }
+}
+
+#[tokio::test]
+async fn test_scan() -> Result<()> {
+    let redis = Redis::new(&RedisConfig::default()).await?;
+    let mut conn = redis.conn();
+
+    for i in (0..100).rev() {
+        conn.del(&format!("async-key{}", i)).await?;
+        conn.set(&format!("async-key{}", i), b"foo").await?;
+    }
+
+    let mut iter: AsyncIter<String> = conn.scan_match("async-key*").await?;
+
+    while let Some(key) = iter.next_item().await {
+        println!("key: {key}");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_stream_add() -> Result<()> {
+    let redis = Redis::new(&RedisConfig::default()).await?;
+    let mut conn = redis.conn();
+
+    for i in 100..200 {
+        conn.xadd::<&str, &str, &str, u8, ()>("/processing/unsend/", "*", &[("send_init_hash", i)])
+            .await
+            .map_err(|e| println!("{}", e))
+            .ok();
+        conn.xadd::<&str, &str, &str, u8, ()>(
+            "/processing/uncheck/",
+            "*",
+            &[("check_init_hash", i)],
+        )
+        .await
+        .map_err(|e| println!("{}", e))
+        .ok();
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_stream() -> Result<()> {
+    let redis = Redis::new(&RedisConfig::default()).await?;
+    let mut conn = redis.conn();
+    let keys = &["/processing/uncheck/"];
+    let group_name = "Auto-api";
+
+    // let _: () = conn.xgroup_destroy(keys[1], group_name).await?;
+
+    // let _: () = conn.xgroup_create_mkstream(keys, group_name, "0").await?;
+
+    let opts = streams::StreamReadOptions::default()
+        .group(group_name, "Auto-api-1")
+        .count(2);
+
+    let iter: streams::StreamReadReply = conn.xread_options(keys, &[">"], &opts).await?;
+
+    println!("keys len: {:#?}", iter.keys.len());
+
+    for key in iter.keys {
+        println!("ids len: {:#?}", key.ids.len());
+        for id in key.ids {
+            println!("id: {id:?}");
+            for v in id.map.values() {
+                println!("value: {v:?}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_xpending() -> Result<()> {
+    let redis = Redis::new(&RedisConfig::default()).await?;
+    let mut conn = redis.conn();
+    let keys = &["/processing/uncheck/"];
+    let group_name = "Auto-api";
+    let count = 2000;
+
+    let iter: streams::StreamPendingCountReply = conn
+        .xpending_count(keys, group_name, "-", "+", count)
+        .await?;
+
+    println!("ids len: {:#?}", iter.ids.len());
+
+    let ids = iter
+        .ids
+        .into_iter()
+        .map(|i| {
+            println!("id: {}", i.id);
+            i.id
+        })
+        .collect::<Vec<_>>();
+
+    if ids.is_empty() {
+        return Ok(());
+    }
+
+    let iter: streams::StreamRangeReply = conn
+        .xrange(keys, ids[0].clone(), ids[ids.len() - 1].clone())
+        .await?;
+
+    println!("ids len: {:#?}", iter.ids.len());
+    for id in iter.ids {
+        println!("id: {id:?}");
+        for v in id.map.values() {
+            println!("value: {v:?}");
+        }
+    }
+    conn.xack(keys, group_name, &ids).await?;
+    Ok(())
 }
