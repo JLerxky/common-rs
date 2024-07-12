@@ -14,16 +14,22 @@
 
 use std::fmt::{Display, Formatter};
 
-use color_eyre::eyre::Error;
-use salvo::{catcher::Catcher, prelude::*};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::get,
+    Json, Router,
+};
+use color_eyre::{eyre::Error, Result};
 use serde::Serialize;
 use serde_json::json;
-use tokio::signal;
+use tokio::{net::TcpListener, signal};
 use tracing::info;
 
 use crate::error::CALError;
 
-pub type HttpServerHandle = salvo::server::ServerHandle;
+pub use axum;
+pub use axum_extra;
 
 #[derive(Debug)]
 pub struct RESTfulError {
@@ -37,16 +43,16 @@ impl Display for RESTfulError {
     }
 }
 
-#[async_trait]
-impl Writer for RESTfulError {
-    async fn write(mut self, _req: &mut Request, _depot: &mut Depot, res: &mut Response) {
-        res.status_code(
+impl IntoResponse for RESTfulError {
+    fn into_response(self) -> Response {
+        (
             StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-        );
-        res.render(Json(json!({
-            "code": self.code,
-            "message": self.err.to_string(),
-        })));
+            Json(json!({
+                "code": self.code,
+                "message": self.err.to_string(),
+            })),
+        )
+            .into_response()
     }
 }
 
@@ -68,50 +74,24 @@ where
     }
 }
 
-#[handler]
-async fn handle_http_error(
-    &self,
-    _req: &Request,
-    _depot: &Depot,
-    res: &mut Response,
-    ctrl: &mut FlowCtrl,
-) {
-    if let Some(status_code) = res.status_code {
-        match status_code {
-            StatusCode::OK | StatusCode::INTERNAL_SERVER_ERROR => {}
-            _ => {
-                res.render(Json(json!({
-                    "code": status_code.as_u16(),
-                    "message": status_code.canonical_reason().unwrap_or_default(),
-                })));
-            }
-        }
-        ctrl.skip_rest();
-    }
-}
-
-#[handler]
-async fn health() -> impl Writer {
+async fn health() -> impl IntoResponse {
     ok_no_data()
 }
 
-pub async fn http_serve(service_name: &str, port: u16, router: Router) {
-    let router = router.push(Router::with_path("health").get(health));
+pub async fn http_serve(service_name: &str, port: u16, router: Router) -> Result<()> {
+    let router = router.route("/health", get(health));
 
-    let doc = OpenApi::new(format!("{} api", service_name), "0.0.1").merge_router(&router);
+    let listener = TcpListener::bind(format!("[::]:{}", port)).await?;
 
-    let router = router
-        .unshift(doc.into_router("/api-doc/openapi.json"))
-        .unshift(SwaggerUi::new("/api-doc/openapi.json").into_router("swagger-ui"));
+    info!(
+        "{service_name} listening on http://{}",
+        listener.local_addr()?
+    );
+    axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
-    let service = Service::new(router).catcher(Catcher::default().hoop(handle_http_error));
-
-    let acceptor = TcpListener::new(format!("0.0.0.0:{}", port)).bind().await;
-
-    let server = Server::new(acceptor);
-    let handle = server.handle();
-    tokio::spawn(shutdown_signal(handle));
-    server.serve(service).await;
+    Ok(())
 }
 
 #[derive(Debug, Serialize)]
@@ -124,28 +104,28 @@ pub struct RESTfulResponse<T: Serialize> {
 
 unsafe impl<T: Serialize> Send for RESTfulResponse<T> {}
 
-#[async_trait]
-impl<T: Serialize> Writer for RESTfulResponse<T> {
-    async fn write(mut self, _req: &mut Request, _depot: &mut Depot, res: &mut Response) {
-        res.status_code(
+impl<T: Serialize> IntoResponse for RESTfulResponse<T> {
+    fn into_response(self) -> Response {
+        (
             StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-        );
-        if let Some(data) = self.data {
-            res.render(Json(json!({
-                "code": self.code,
-                "message": self.message,
-                "data": data,
-            })));
-        } else {
-            res.render(Json(json!({
-                "code": self.code,
-                "message": self.message,
-            })));
-        }
+            if let Some(data) = self.data {
+                Json(json!({
+                    "code": self.code,
+                    "message": self.message,
+                    "data": data,
+                }))
+            } else {
+                Json(json!({
+                    "code": self.code,
+                    "message": self.message,
+                }))
+            },
+        )
+            .into_response()
     }
 }
 
-pub fn ok<T: Serialize>(data: T) -> Result<impl Writer, RESTfulError> {
+pub fn ok<T: Serialize>(data: T) -> Result<impl IntoResponse, RESTfulError> {
     Ok(RESTfulResponse {
         code: 200,
         message: "OK".to_string(),
@@ -153,7 +133,7 @@ pub fn ok<T: Serialize>(data: T) -> Result<impl Writer, RESTfulError> {
     })
 }
 
-pub fn ok_no_data() -> Result<impl Writer, RESTfulError> {
+pub fn ok_no_data() -> Result<impl IntoResponse, RESTfulError> {
     Ok(RESTfulResponse::<()> {
         code: 200,
         message: "OK".to_string(),
@@ -163,7 +143,7 @@ pub fn ok_no_data() -> Result<impl Writer, RESTfulError> {
 
 pub fn err<W>(code: CALError, message: &str) -> Result<W, RESTfulError>
 where
-    W: Writer,
+    W: IntoResponse,
 {
     Err(RESTfulError {
         code: code.into(),
@@ -173,7 +153,7 @@ where
 
 pub fn err_code<W>(code: CALError) -> Result<W, RESTfulError>
 where
-    W: Writer,
+    W: IntoResponse,
 {
     Err(RESTfulError {
         code: code.into(),
@@ -183,7 +163,7 @@ where
 
 pub fn err_msg<W>(message: &str) -> Result<W, RESTfulError>
 where
-    W: Writer,
+    W: IntoResponse,
 {
     Err(RESTfulError {
         code: CALError::InternalServerError.into(),
@@ -191,7 +171,7 @@ where
     })
 }
 
-async fn shutdown_signal(handle: HttpServerHandle) {
+async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -213,5 +193,4 @@ async fn shutdown_signal(handle: HttpServerHandle) {
         _ = ctrl_c => info!("ctrl_c signal received"),
         _ = terminate => info!("terminate signal received"),
     }
-    handle.stop_graceful(None);
 }
