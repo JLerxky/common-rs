@@ -79,7 +79,17 @@ async fn health() -> impl IntoResponse {
 }
 
 pub async fn http_serve(service_name: &str, port: u16, router: Router) -> Result<()> {
-    let router = router.route("/health", get(health));
+    async fn handler_404() -> impl IntoResponse {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "code": 404,
+                "message": "not found",
+            })),
+        )
+    }
+
+    let router = router.route("/health", get(health)).fallback(handler_404);
 
     let listener = TcpListener::bind(format!("[::]:{}", port)).await?;
 
@@ -131,6 +141,10 @@ pub fn ok<T: Serialize>(data: T) -> Result<impl IntoResponse, RESTfulError> {
         message: "OK".to_string(),
         data: Some(data),
     })
+}
+
+pub fn ok_sample<T: Serialize>(data: T) -> Result<impl IntoResponse, RESTfulError> {
+    Ok((StatusCode::OK, Json(json!(data))))
 }
 
 pub fn ok_no_data() -> Result<impl IntoResponse, RESTfulError> {
