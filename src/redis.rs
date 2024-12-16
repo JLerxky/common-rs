@@ -115,7 +115,7 @@ impl ServiceRegister for Redis {
                 match redis
                     .conn()
                     .set_ex(
-                        &format!(
+                        format!(
                             "traefik/http/services/{}/loadbalancer/servers/{}/url",
                             service_name, service_name
                         ),
@@ -130,7 +130,7 @@ impl ServiceRegister for Redis {
                 match redis
                     .conn()
                     .set_ex(
-                        &format!("traefik/http/routers/{}/service", service_name),
+                        format!("traefik/http/routers/{}/service", service_name),
                         service_name,
                         config.ttl as u64,
                     )

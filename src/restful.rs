@@ -144,7 +144,7 @@ pub fn ok<T: Serialize>(data: T) -> Result<impl IntoResponse, RESTfulError> {
 }
 
 pub fn ok_sample<T: Serialize>(data: T) -> Result<impl IntoResponse, RESTfulError> {
-    Ok((StatusCode::OK, Json(json!(data))))
+    Ok((StatusCode::OK, Json(data)))
 }
 
 pub fn ok_no_data() -> Result<impl IntoResponse, RESTfulError> {
